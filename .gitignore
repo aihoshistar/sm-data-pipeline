@@ -1,0 +1,24 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.venv/
+venv/
+ENV/
+
+# Configuration / Secrets
+.env
+*.log
+logs/
+/temp/
+
+# Airflow local files
+standalone_admin_password.txt
+airflow.db
+webserver_config.py
+
+# OS files
+.DS_Store
+Thumbs.db
