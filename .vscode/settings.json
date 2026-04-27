@@ -1,0 +1,17 @@
+{
+  "workbench.colorTheme": "Monokai Dimmed",
+  "workbench.colorCustomizations": {
+    "activityBar.background": "#1a241e",
+    "activityBar.foreground": "#4ade80",
+    "titleBar.activeBackground": "#1e2d24",
+    "titleBar.activeForeground": "#4ade80",
+    "statusBar.background": "#1e2d24",
+    "statusBar.foreground": "#ffffff",
+    // 에디터 배경을 짙은 녹색조가 도는 다크 그레이로 변경
+    "editor.background": "#1a1c1a"
+  },
+  "editor.renderWhitespace": "boundary",
+  "editor.guides.bracketPairs": true,
+  "window.title": "🟢 PIPE LINE | ${activeEditorShort}${dirty}",
+  "window.customTitleBarVisibility": "window"
+}
