@@ -1,92 +1,100 @@
 """
 Base Crawler
-모든 크롤러의 베이스 클래스
+모든 크롤러의 부모 클래스
 """
-import abc
-from connectors.db_connector import get_db_connection  # src. 제거
-from utils.discord_helper import send_discord_alert  # src. 제거
+from abc import ABC, abstractmethod
+from src.connectors.db_connector import get_db_connection
+from src.utils.discord_helper import send_crawling_success, send_crawling_error
 
 
-class BaseCrawler(abc.ABC):
-    """
-    모든 크롤러의 추상 베이스 클래스
+class BaseCrawler(ABC):
+    """크롤러 베이스 클래스"""
     
-    Args:
-        platform_name: 플랫폼 이름 (예: "YouTube", "X(Twitter)")
-    """
-    
-    def __init__(self, platform_name: str):
-        self.platform_name = platform_name
-        self.db_conn = get_db_connection()
-
-    @abc.abstractmethod
-    def crawl(self, artist_info: dict) -> dict:
+    def __init__(self, crawler_name: str):
         """
-        크롤링 수행 (추상 메소드)
+        Args:
+            crawler_name: 크롤러 이름
+        """
+        self.crawler_name = crawler_name
+        self.db_conn = None
+        self.db_cursor = None
+    
+    def connect_db(self):
+        """데이터베이스 연결"""
+        try:
+            self.db_conn = get_db_connection()
+            self.db_cursor = self.db_conn.cursor()
+            print(f"✅ [{self.crawler_name}] DB 연결 성공")
+        except Exception as e:
+            print(f"❌ [{self.crawler_name}] DB 연결 실패: {e}")
+            raise
+    
+    def close_db(self):
+        """데이터베이스 연결 종료"""
+        if self.db_cursor:
+            self.db_cursor.close()
+        if self.db_conn:
+            self.db_conn.close()
+        print(f"✅ [{self.crawler_name}] DB 연결 종료")
+    
+    @abstractmethod
+    def crawl(self, artist: dict):
+        """
+        크롤링 실행 (하위 클래스에서 구현 필요)
         
         Args:
-            artist_info: 아티스트 정보 딕셔너리
-                - id: 아티스트 ID
-                - name: 아티스트 이름
+            artist: 아티스트 정보 딕셔너리
         
         Returns:
-            크롤링된 데이터 딕셔너리
+            dict: 크롤링 데이터
         """
         pass
-
-    @abc.abstractmethod
+    
+    @abstractmethod
     def save_to_db(self, data: dict):
         """
-        DB 저장 (추상 메소드)
+        데이터베이스에 저장 (하위 클래스에서 구현 필요)
         
         Args:
-            data: 저장할 데이터 딕셔너리
+            data: 저장할 데이터
         """
         pass
-
-    def execute(self, artist_info: dict) -> bool:
+    
+    def run(self, artist: dict):
         """
-        크롤링 실행 및 저장 (Airflow DAG에서 호출)
+        크롤링 전체 프로세스 실행
         
         Args:
-            artist_info: 아티스트 정보 딕셔너리
-        
-        Returns:
-            성공 여부 (True/False)
+            artist: 아티스트 정보 딕셔너리
         """
         try:
-            print(f"[{self.platform_name}] {artist_info['name']} 데이터 수집 시작...")
+            print(f"🚀 [{self.crawler_name}] 크롤링 시작: {artist['name']}")
             
-            # 1. 크롤링 수행
-            data = self.crawl(artist_info)
+            # DB 연결
+            self.connect_db()
             
-            # 2. DB 저장
+            # 크롤링 실행
+            data = self.crawl(artist)
+            
             if data:
+                # DB 저장
                 self.save_to_db(data)
-                print(f"[{self.platform_name}] 데이터 저장 완료: {data}")
+                print(f"✅ [{self.crawler_name}] 크롤링 완료")
                 
-                # 성공 알림 (선택 사항)
-                # send_discord_alert(
-                #     f"[{self.platform_name}] {artist_info['name']} 데이터 수집 완료",
-                #     level="INFO"
-                # )
+                # Discord 알림
+                send_crawling_success(self.crawler_name, 1)
             else:
-                print(f"[{self.platform_name}] 수집된 데이터가 없습니다.")
-                
-            return True
-
-        except Exception as e:
-            error_msg = (
-                f"[{self.platform_name}] 데이터 수집 실패\n"
-                f"Artist: {artist_info.get('name', 'Unknown')}\n"
-                f"Error: {str(e)}"
-            )
-            print(f"❌ {error_msg}")
-            send_discord_alert(error_msg, level="ERROR")
-            raise e
+                print(f"⚠️  [{self.crawler_name}] 크롤링 데이터 없음")
             
+        except Exception as e:
+            error_msg = str(e)
+            print(f"❌ [{self.crawler_name}] 크롤링 실패: {error_msg}")
+            
+            # Discord 알림
+            send_crawling_error(self.crawler_name, error_msg)
+            
+            raise
+        
         finally:
             # DB 연결 종료
-            if self.db_conn and self.db_conn.open:
-                self.db_conn.close()
-                print(f"[{self.platform_name}] DB 연결 종료")
+            self.close_db()

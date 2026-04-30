@@ -1,67 +1,71 @@
 """
-YouTube Crawler - PostgreSQL
-YouTube 영상 통계 크롤링 (PostgreSQL에 저장)
+YouTube Crawler
+YouTube 비디오 데이터 수집
 """
-from crawlers.base_crawler import BaseCrawler
+from src.crawlers.base_crawler import BaseCrawler
 from datetime import datetime
 
 
 class YoutubeCrawler(BaseCrawler):
-    """YouTube 영상 통계 크롤러 (PostgreSQL)"""
+    """YouTube 크롤러"""
     
     def __init__(self):
-        super().__init__(platform_name="YouTube")
-
-    def crawl(self, artist_info: dict) -> dict:
+        super().__init__("YouTube Crawler")
+    
+    def crawl(self, artist: dict):
         """
-        YouTube 영상 통계 크롤링
-        
-        TODO: YouTube Data API v3 또는 Selenium을 사용한 실제 크롤링 구현
+        YouTube 비디오 크롤링
         
         Args:
-            artist_info: 아티스트 정보
+            artist: 아티스트 정보 {'id': 1, 'name': 'aespa', ...}
         
         Returns:
-            YouTube 통계 데이터
+            dict: 크롤링 데이터
         """
-        # 현재는 임시 더미 데이터 반환
-        # 실제 구현 시 YouTube Data API 또는 크롤링 로직으로 대체
+        print(f"🔍 [{self.crawler_name}] {artist['name']} YouTube 데이터 수집 중...")
         
-        return {
-            "artist_id": artist_info['id'],
-            "video_id": f"dummy_video_{artist_info['id']}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
-            "title": f"{artist_info['name']} - 신곡 MV",
-            "description": f"{artist_info['name']}의 최신 뮤직비디오",
-            "thumbnail_url": f"https://i.ytimg.com/vi/dummy/maxresdefault.jpg",
-            "view_count": 5000000,
-            "like_count": 250000,
-            "comment_count": 15000,
-            "published_at": datetime.now()
+        # TODO: 실제 YouTube Data API 구현
+        # 현재는 더미 데이터 반환
+        data = {
+            'artist_id': artist['id'],
+            'video_id': 'dummy_video_123',
+            'title': f"{artist['name']} - Latest Video",
+            'description': 'This is a test video',
+            'thumbnail_url': 'https://i.ytimg.com/vi/dummy/maxresdefault.jpg',
+            'view_count': 1000000,
+            'like_count': 50000,
+            'comment_count': 5000,
+            'published_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
-
+        
+        return data
+    
     def save_to_db(self, data: dict):
         """
-        YouTube 통계를 crawled_youtube_videos 테이블에 저장 (PostgreSQL)
+        PostgreSQL에 데이터 저장
         
         Args:
-            data: YouTube 통계 데이터
+            data: 저장할 YouTube 데이터
         """
-        cursor = self.db_conn.cursor()
-        
-        # PostgreSQL 테이블: crawled_youtube_videos
         sql = """
-            INSERT INTO crawled_youtube_videos 
-            (artist_id, video_id, title, description, thumbnail_url, 
-             view_count, like_count, comment_count, published_at, crawled_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        INSERT INTO crawled_youtube_videos (
+            artist_id, video_id, title, description, thumbnail_url,
+            view_count, like_count, comment_count, published_at, created_at
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        ON CONFLICT (video_id) 
+        DO UPDATE SET
+            view_count = EXCLUDED.view_count,
+            like_count = EXCLUDED.like_count,
+            comment_count = EXCLUDED.comment_count,
+            updated_at = NOW()
         """
         
-        cursor.execute(sql, (
+        self.db_cursor.execute(sql, (
             data['artist_id'],
             data['video_id'],
             data['title'],
-            data.get('description', ''),
-            data.get('thumbnail_url', ''),
+            data['description'],
+            data['thumbnail_url'],
             data['view_count'],
             data['like_count'],
             data['comment_count'],
@@ -69,18 +73,11 @@ class YoutubeCrawler(BaseCrawler):
         ))
         
         self.db_conn.commit()
-        cursor.close()
-        
-        print(f"✅ YouTube 데이터 저장 (PostgreSQL): video_id={data['video_id']}, views={data['view_count']:,}")
+        print(f"💾 [{self.crawler_name}] DB 저장 완료: {data['video_id']}")
 
 
-# 테스트용
-if __name__ == "__main__":
+if __name__ == '__main__':
+    # 테스트 실행
     crawler = YoutubeCrawler()
-    
-    test_artist = {
-        'id': 1,
-        'name': 'aespa'
-    }
-    
-    crawler.execute(test_artist)
+    test_artist = {'id': 1, 'name': 'aespa'}
+    crawler.run(test_artist)

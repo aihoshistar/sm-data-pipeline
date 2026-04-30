@@ -1,118 +1,79 @@
 """
-Discord Helper
-Discord 웹훅을 통한 알림 전송
+Discord Webhook Helper
+크롤링 결과 및 에러 알림
 """
 import os
 import requests
+from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
 
 
-def send_discord_alert(message: str, level: str = "INFO"):
+def send_discord_message(message: str, status: str = "info"):
     """
-    Discord 채널로 알림 전송
+    Discord Webhook으로 메시지 전송
     
     Args:
         message: 전송할 메시지
-        level: 알림 레벨 ('INFO', 'WARNING', 'ERROR')
-    
-    Returns:
-        성공 여부 (True/False)
+        status: 메시지 상태 (info, success, error)
     """
-    webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
+    webhook_url = os.getenv('DISCORD_WEBHOOK_URL')
     
     if not webhook_url:
-        print("⚠️ Warning: DISCORD_WEBHOOK_URL이 설정되지 않았습니다.")
-        return False
-
-    # 레벨에 따른 이모지 및 색상
-    emoji_map = {
-        "INFO": "ℹ️",
-        "WARNING": "⚠️",
-        "ERROR": "🚨"
+        print("⚠️  Discord Webhook URL이 설정되지 않았습니다.")
+        return
+    
+    # 상태에 따른 색상
+    colors = {
+        "info": 0x3498db,     # 파란색
+        "success": 0x2ecc71,  # 초록색
+        "error": 0xe74c3c     # 빨간색
     }
     
-    emoji = emoji_map.get(level.upper(), "📌")
-    prefix = f"{emoji} [{level.upper()}]"
-    
-    payload = {
-        "content": f"{prefix} {message}",
-        "username": "SM Artist Insights Bot"
+    # 상태에 따른 이모지
+    emojis = {
+        "info": "ℹ️",
+        "success": "✅",
+        "error": "❌"
     }
-
-    try:
-        response = requests.post(webhook_url, json=payload, timeout=5)
-        response.raise_for_status()
-        print(f"✅ Discord 알림 전송 성공: {level}")
-        return True
-        
-    except requests.exceptions.Timeout:
-        print(f"❌ Discord 알림 타임아웃: {message[:50]}...")
-        return False
-        
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Discord 알림 전송 실패: {e}")
-        return False
-
-
-def send_discord_embed(title: str, description: str, color: int = 0x00FF00, fields: list = None):
-    """
-    Discord 임베드 메시지 전송 (더 예쁜 형식)
     
-    Args:
-        title: 임베드 제목
-        description: 임베드 설명
-        color: 임베드 색상 (HEX)
-        fields: 추가 필드 리스트
-    
-    Returns:
-        성공 여부 (True/False)
-    """
-    webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
-    
-    if not webhook_url:
-        print("⚠️ Warning: DISCORD_WEBHOOK_URL이 설정되지 않았습니다.")
-        return False
-
     embed = {
-        "title": title,
-        "description": description,
-        "color": color,
-        "fields": fields or [],
+        "title": f"{emojis.get(status, 'ℹ️')} SM Data Pipeline",
+        "description": message,
+        "color": colors.get(status, 0x3498db),
+        "timestamp": datetime.utcnow().isoformat(),
         "footer": {
             "text": "SM Artist Insights"
         }
     }
     
-    payload = {
-        "embeds": [embed],
-        "username": "SM Artist Insights Bot"
+    data = {
+        "embeds": [embed]
     }
-
-    try:
-        response = requests.post(webhook_url, json=payload, timeout=5)
-        response.raise_for_status()
-        print(f"✅ Discord 임베드 전송 성공")
-        return True
-        
-    except Exception as e:
-        print(f"❌ Discord 임베드 전송 실패: {e}")
-        return False
-
-
-# 테스트용
-if __name__ == "__main__":
-    # 기본 알림 테스트
-    send_discord_alert("테스트 메시지입니다.", level="INFO")
     
-    # 임베드 알림 테스트
-    send_discord_embed(
-        title="크롤링 완료",
-        description="aespa 데이터 수집이 완료되었습니다.",
-        color=0x00FF00,
-        fields=[
-            {"name": "플랫폼", "value": "YouTube", "inline": True},
-            {"name": "수집 개수", "value": "15개", "inline": True}
-        ]
-    )
+    try:
+        response = requests.post(webhook_url, json=data)
+        if response.status_code == 204:
+            print("✅ Discord 알림 전송 성공")
+        else:
+            print(f"⚠️  Discord 알림 전송 실패: {response.status_code}")
+    except Exception as e:
+        print(f"❌ Discord 알림 전송 에러: {e}")
+
+
+def send_crawling_success(crawler_name: str, count: int):
+    """크롤링 성공 알림"""
+    message = f"**{crawler_name}** 크롤링 완료\n📊 수집 데이터: {count}건"
+    send_discord_message(message, "success")
+
+
+def send_crawling_error(crawler_name: str, error: str):
+    """크롤링 에러 알림"""
+    message = f"**{crawler_name}** 크롤링 실패\n⚠️ 에러: {error}"
+    send_discord_message(message, "error")
+
+
+if __name__ == '__main__':
+    # 테스트
+    send_discord_message("Discord 연동 테스트", "info")

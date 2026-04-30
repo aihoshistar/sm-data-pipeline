@@ -1,45 +1,75 @@
+"""
+Community Posts Collection DAG
+매일 6시간마다 커뮤니티 게시글 수집
+"""
+import sys
+import os
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-import sys
-import os
 
+# src 경로 추가
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from crawlers.community_crawler import CommunityCrawler
 
+
+def get_artists():
+    """크롤링 대상 아티스트 목록 조회"""
+    from connectors.db_connector import get_db_connection
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT id, name, search_keywords FROM artists WHERE is_active = true")
+    artists = cursor.fetchall()
+    
+    cursor.close()
+    conn.close()
+    
+    return [
+        {'id': artist[0], 'name': artist[1], 'search_keywords': artist[2]}
+        for artist in artists
+    ]
+
+
+def crawl_community_posts():
+    """커뮤니티 게시글 크롤링 실행"""
+    artists = get_artists()
+    crawler = CommunityCrawler()
+    
+    for artist in artists:
+        try:
+            crawler.run(artist)
+        except Exception as e:
+            print(f"❌ {artist['name']} 크롤링 실패: {e}")
+            continue
+
+
+# DAG 기본 설정
 default_args = {
-    'owner': 'data_engineer',
+    'owner': 'airflow',
     'depends_on_past': False,
-    'start_date': datetime(2026, 4, 16),
+    'email_on_failure': False,
+    'email_on_retry': False,
     'retries': 1,
-    'retry_delay': timedelta(minutes=10),
+    'retry_delay': timedelta(minutes=5),
 }
 
-def run_community_crawler():
-    """아티스트 목록을 순회하며 국내 커뮤니티 게시글 수집"""
-    target_artists = [
-        {"id": 1, "name": "aespa"},
-        {"id": 2, "name": "NCT 127"}
-    ]
-    
-    crawler = CommunityCrawler()
-    for artist in target_artists:
-        crawler.execute(artist)
-
-# DAG 정의 (오전 8시, 오후 8시 실행)
-with DAG(
-    'community_collection_dag',
+# DAG 정의
+dag = DAG(
+    'community_posts_collection_dag',
     default_args=default_args,
-    description='국내 커뮤니티(더쿠, 인스티즈 등) 여론 데이터 수집',
-    schedule_interval='0 8,20 * * *', # Cron 표현식: 매일 08시, 20시
+    description='커뮤니티 게시글 데이터 수집',
+    schedule_interval='0 */6 * * *',  # 매 6시간마다
+    start_date=datetime(2024, 1, 1),
     catchup=False,
-    tags=['sm', 'community', 'sentiment', 'pipeline'],
-) as dag:
+    tags=['community', 'theqoo', 'instiz', 'crawling'],
+)
 
-    collect_community_task = PythonOperator(
-        task_id='collect_community_task',
-        python_callable=run_community_crawler,
-    )
-
-    collect_community_task
+# Task 정의
+crawl_task = PythonOperator(
+    task_id='crawl_community_posts',
+    python_callable=crawl_community_posts,
+    dag=dag,
+)
