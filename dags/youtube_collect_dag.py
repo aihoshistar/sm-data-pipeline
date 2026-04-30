@@ -5,9 +5,9 @@ import sys
 import os
 
 # Airflow가 src 폴더의 모듈을 인식할 수 있도록 경로 추가
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from src.crawlers.youtube_crawler import YoutubeCrawler
+from crawlers.youtube_crawler import YoutubeCrawler
 
 # DAG 기본 설정 (재시도 횟수, 시작일 등)
 default_args = {

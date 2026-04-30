@@ -1,13 +1,12 @@
 """
-Community Crawler
-커뮤니티 게시글 크롤링
+Community Crawler - PostgreSQL
+커뮤니티 게시글 크롤링 (PostgreSQL에 저장)
 """
 from crawlers.base_crawler import BaseCrawler
-from datetime import datetime
 
 
 class CommunityCrawler(BaseCrawler):
-    """커뮤니티 게시글 크롤러"""
+    """커뮤니티 게시글 크롤러 (PostgreSQL)"""
     
     def __init__(self):
         super().__init__(platform_name="Community")
@@ -29,55 +28,58 @@ class CommunityCrawler(BaseCrawler):
         
         return {
             "artist_id": artist_info['id'],
-            "platform": "theqoo",  # theqoo, instiz, pann, reddit 등
+            "platform": "theqoo",  # theqoo, instiz, pann 등
+            "post_url": "https://theqoo.net/square/123456789",
             "post_title": f"{artist_info['name']} 오늘 뜬 티저 사진",
-            "post_content": "분위기 대박이다 진짜... 이번 컨셉 미쳤음",
-            "like_count": 1850,  # view_count → like_count (스키마 일치)
-            "comment_count": 234,  # 추가
-            "posted_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # post_created_at → posted_at
+            "post_content": "분위기 대박이다 진짜... 이번 컨셉 미쳤음 완전 기대됨",
+            "author_nickname": "케이팝덕후",
+            "view_count": 12500,
+            "like_count": 1850,
+            "comment_count": 234
         }
 
     def save_to_db(self, data: dict):
         """
-        커뮤니티 게시글을 sns_community_posts 테이블에 저장
+        커뮤니티 게시글을 crawled_community_posts 테이블에 저장 (PostgreSQL)
         
         Args:
             data: 커뮤니티 게시글 데이터
         """
         cursor = self.db_conn.cursor()
         
-        # 테이블 스키마와 일치하도록 수정
+        # PostgreSQL 테이블: crawled_community_posts
         sql = """
-            INSERT INTO sns_community_posts 
-            (artist_id, platform, post_title, post_content, like_count, comment_count, posted_at, collected_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+            INSERT INTO crawled_community_posts 
+            (artist_id, platform, post_url, post_title, post_content, 
+             author_nickname, view_count, like_count, comment_count, crawled_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
         """
         
         cursor.execute(sql, (
             data['artist_id'],
             data['platform'],
+            data.get('post_url', ''),
             data['post_title'],
             data['post_content'],
-            data.get('like_count', 0),  # 없으면 0
-            data.get('comment_count', 0),  # 없으면 0
-            data['posted_at']  # post_created_at → posted_at
+            data.get('author_nickname', 'unknown'),
+            data.get('view_count', 0),
+            data.get('like_count', 0),
+            data.get('comment_count', 0)
         ))
         
         self.db_conn.commit()
         cursor.close()
         
-        print(f"✅ 커뮤니티 게시글 저장: platform={data['platform']}, likes={data.get('like_count', 0):,}")
+        print(f"✅ 커뮤니티 게시글 저장 (PostgreSQL): platform={data['platform']}, likes={data.get('like_count', 0):,}")
 
 
 # 테스트용
 if __name__ == "__main__":
     crawler = CommunityCrawler()
     
-    # 테스트 아티스트 정보
     test_artist = {
         'id': 1,
         'name': 'aespa'
     }
     
-    # 크롤링 실행
     crawler.execute(test_artist)
